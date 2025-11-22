@@ -1,15 +1,45 @@
 import { getApiUrl } from '@/lib/config/api-config'
 
+export interface EmpleadoEnPedido {
+  nombre_completo: string
+  calificacion_prom: string
+  dni: string
+  rol: string
+}
+
+export interface HistorialEstado {
+  hora_fin: string
+  estado: string
+  empleado: EmpleadoEnPedido | null
+  hora_inicio: string
+  activo: boolean
+}
+
+export interface ComboEnPedido {
+  combo_id: string
+  cantidad: string
+}
+
+export interface ProductoEnPedido {
+  nombre: string
+  cantidad: string
+}
+
 export interface Pedido {
   pedido_id: string
   local_id: string
-  cliente_id?: string
-  estado?: string
-  total?: string
-  fecha?: string
-  items?: string
-  direccion?: string
-  telefono?: string
+  combos?: ComboEnPedido[]
+  productos?: ProductoEnPedido[]
+  historial_estados: HistorialEstado[]
+  estado: string
+  costo: string
+  fecha_entrega_aproximada: string
+  direccion: string
+  usuario_correo: string
+}
+
+export interface PedidosResponse {
+  data: Pedido[]
 }
 
 export interface DeletePedidoResponse {
@@ -44,6 +74,16 @@ class PedidoService {
     }
 
     return response.json()
+  }
+
+  async getPedidosByLocal(localId: string): Promise<PedidosResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/pedidos?local_id=${localId}`)
+      return data
+    } catch (error) {
+      console.error('Error fetching pedidos:', error)
+      throw error
+    }
   }
 
   async deletePedido(localId: string, pedidoId: string): Promise<DeletePedidoResponse> {

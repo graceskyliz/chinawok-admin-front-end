@@ -1,29 +1,57 @@
 import { getApiUrl } from '@/lib/config/api-config'
 
 // Interfaces for Analytics responses
-export interface ProductAnalytics {
-  producto_id: string
-  nombre: string
-  cantidad_vendida: number
-  ingresos_totales: number
-  categoria?: string
+export interface Empleado {
+  local_id: string
+  dni: string
+  nombre_completo: string
+  rol: string
+  sueldo_mensual: string
+  calificacion_promedio: string
+  total_resenas: string
+  pedidos_atendidos: string
+  revenue_generado: string
+  score_performance: string
 }
 
 export interface PersonalAnalytics {
-  empleado_id: string
-  nombre: string
-  rol: string
-  pedidos_atendidos: number
-  calificacion_promedio?: number
-  horas_trabajadas?: number
+  local_id: string
+  total_empleados: number
+  empleados: Empleado[]
+}
+
+export interface RecordDiario {
+  local_id: string
+  fecha: string
+  total_pedidos: string
+  revenue_diario: string
+  ticket_promedio: string
 }
 
 export interface DailyAnalytics {
-  fecha: string
-  total_pedidos: number
-  ingresos_totales: number
-  pedidos_por_hora?: { [hora: string]: number }
-  productos_mas_vendidos?: string[]
+  local_id: string
+  year: number
+  month: number
+  total_dias: number
+  record_diario: RecordDiario[]
+}
+
+export interface Producto {
+  local_id: string
+  producto_nombre: string
+  pedidos_que_lo_incluyen: string
+  unidades_vendidas: string
+  categoria: string
+  precio_unitario_actual: string
+  revenue_total: string
+  stock_disponible: string
+  porcentaje_ventas: string
+}
+
+export interface ProductAnalytics {
+  local_id: string
+  total_productos: number
+  productos: Producto[]
 }
 
 export interface StatisticsAnalytics {
@@ -86,26 +114,26 @@ class AnalyticsService {
     }
   }
 
-  async getProductAnalytics(localId: string): Promise<ProductAnalytics[]> {
+  async getProductAnalytics(localId: string): Promise<ProductAnalytics> {
     try {
       const data = await this.fetchWithAuth(`${this.localesUrl}/analitica/productos`, {
         method: 'POST',
         body: JSON.stringify({ local_id: localId }),
       })
-      return data.productos || data
+      return data
     } catch (error) {
       console.error('Get product analytics error:', error)
       throw error
     }
   }
 
-  async getPersonalAnalytics(localId: string): Promise<PersonalAnalytics[]> {
+  async getPersonalAnalytics(localId: string): Promise<PersonalAnalytics> {
     try {
       const data = await this.fetchWithAuth(`${this.localesUrl}/analitica/personal`, {
         method: 'POST',
         body: JSON.stringify({ local_id: localId }),
       })
-      return data.personal || data
+      return data
     } catch (error) {
       console.error('Get personal analytics error:', error)
       throw error
