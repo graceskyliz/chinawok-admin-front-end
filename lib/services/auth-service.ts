@@ -12,10 +12,10 @@ export interface RegisterRequest {
 export interface LoginResponse {
   token?: string
   usuario?: {
-    id: string
+    id?: string
     nombre: string
     correo: string
-    rol?: string
+    role?: string
   }
   message?: string
 }

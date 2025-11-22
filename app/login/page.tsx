@@ -30,19 +30,19 @@ export default function LoginPage() {
       const response = await authService.login(email, password)
       
       if (response.usuario) {
-        // Determine role from email domain or API response
+        // Determine role from API response or email pattern
         let role: 'admin' | 'gerente' = 'gerente'
-        if (email.includes('admin@')) {
+        if (response.usuario.role) {
+          role = response.usuario.role.toLowerCase() === 'admin' ? 'admin' : 'gerente'
+        } else if (email.includes('admin@')) {
           role = 'admin'
         } else if (email.includes('gerente')) {
           role = 'gerente'
-        } else if (response.usuario.rol) {
-          role = response.usuario.rol.toLowerCase() === 'admin' ? 'admin' : 'gerente'
         }
 
         // Store user data
         localStorage.setItem('user', JSON.stringify({
-          id: response.usuario.id,
+          id: response.usuario.id || response.usuario.correo,
           name: response.usuario.nombre,
           email: response.usuario.correo,
           role: role
