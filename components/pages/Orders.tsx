@@ -1,9 +1,18 @@
-import { MapPin, Phone, Clock, CheckCircle } from 'lucide-react'
+'use client'
+
+import { MapPin, Phone, Clock, CheckCircle, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { useLocalId } from '@/hooks/use-local-id'
+import { pedidoService } from '@/lib/services/pedido-service'
 
 export default function Orders() {
-  const orders = [
+  const localId = useLocalId()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const [orders, setOrders] = useState([
     {
       id: '#1001',
+      pedido_id: 'adc895bb-278a-45a7-a054-82cefb0f18e7',
       customer: 'Juan García',
       phone: '987654321',
       address: 'Miraflores, Lima',
@@ -14,6 +23,7 @@ export default function Orders() {
     },
     {
       id: '#1002',
+      pedido_id: 'bef2a3cc-489b-56b8-b165-93dcb1f29fa8',
       customer: 'María López',
       phone: '912345678',
       address: 'San Isidro, Lima',
@@ -24,6 +34,7 @@ export default function Orders() {
     },
     {
       id: '#1003',
+      pedido_id: 'c1f3b4dd-57ac-67c9-c276-a4edc2g3ahb9',
       customer: 'Carlos Mendez',
       phone: '956789012',
       address: 'Puruchuco, Lima',
@@ -32,7 +43,30 @@ export default function Orders() {
       status: 'Entregado',
       time: '15 min'
     }
-  ]
+  ])
+
+  const handleDeletePedido = async (pedidoId: string) => {
+    if (!localId) {
+      alert('No se pudo obtener el ID del local')
+      return
+    }
+
+    if (!confirm('¿Estás seguro de que deseas eliminar este pedido?')) {
+      return
+    }
+
+    setDeletingId(pedidoId)
+    try {
+      await pedidoService.deletePedido(localId, pedidoId)
+      setOrders(orders.filter(order => order.pedido_id !== pedidoId))
+      alert('Pedido eliminado exitosamente')
+    } catch (error) {
+      console.error('Error al eliminar pedido:', error)
+      alert(error instanceof Error ? error.message : 'Error al eliminar pedido')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -88,9 +122,23 @@ export default function Orders() {
               <span className={`px-4 py-2 rounded-full text-sm font-semibold ${getStatusColor(order.status)}`}>
                 {order.status}
               </span>
-              <button className="text-sm font-medium text-red-600 hover:text-red-700 mt-2">
-                Ver Detalles →
-              </button>
+              <div className="flex gap-2 mt-2">
+                <button className="text-sm font-medium text-red-600 hover:text-red-700">
+                  Ver Detalles →
+                </button>
+                <button
+                  onClick={() => handleDeletePedido(order.pedido_id)}
+                  disabled={deletingId === order.pedido_id}
+                  className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Eliminar pedido"
+                >
+                  {deletingId === order.pedido_id ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                  ) : (
+                    <Trash2 size={18} />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

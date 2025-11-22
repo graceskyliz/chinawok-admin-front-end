@@ -1,3 +1,5 @@
+import { getApiUrl } from '@/lib/config/api-config'
+
 export interface LoginRequest {
   correo: string
   contrasena: string
@@ -30,13 +32,20 @@ export interface RegisterResponse {
   message?: string
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
+export interface UserInfoResponse {
+  message?: string
+  usuario: {
+    nombre: string
+    correo: string
+    apellido?: string
+    historial_pedidos?: any[]
+    role: string
+  }
+}
 
 class AuthService {
-  private baseUrl: string
-
-  constructor() {
-    this.baseUrl = API_BASE_URL!
+  private get baseUrl(): string {
+    return getApiUrl('usuarios')
   }
 
   async login(correo: string, contrasena: string): Promise<LoginResponse> {
@@ -129,6 +138,38 @@ class AuthService {
     } catch (error) {
       console.error('Token validation error:', error)
       return false
+    }
+  }
+
+  async getUserInfo(): Promise<UserInfoResponse> {
+    try {
+      const token = this.getToken()
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const response = await fetch(`${this.baseUrl}/usuario/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.message || errorData.error || `Error ${response.status}: ${response.statusText}`
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      return data
+    } catch (error) {
+      console.error('Get user info error:', error)
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        throw new Error('Cannot connect to server. Please check if CORS is enabled on the API.')
+      }
+      throw error
     }
   }
 }

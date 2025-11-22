@@ -1,36 +1,95 @@
+'use client'
+
 import { TrendingUp, Users, ShoppingCart, DollarSign } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { analyticsService, StatisticsAnalytics, ProductAnalytics } from '@/lib/services/analytics-service'
+import { useLocalId } from '@/hooks/use-local-id'
 
 export default function Dashboard() {
-  const stats = [
+  const localId = useLocalId()
+  const [statistics, setStatistics] = useState<StatisticsAnalytics | null>(null)
+  const [topProducts, setTopProducts] = useState<ProductAnalytics[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!localId) {
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        const [stats, products] = await Promise.all([
+          analyticsService.getStatistics(localId),
+          analyticsService.getProductAnalytics(localId)
+        ])
+        
+        setStatistics(stats)
+        setTopProducts(products.slice(0, 4)) // Top 4 products
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err)
+        setError(err instanceof Error ? err.message : 'Error al cargar datos')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [localId])
+
+  const stats = statistics ? [
     {
       label: 'Ventas del Día',
-      value: 'S/. 2,450',
+      value: `S/. ${statistics.ventas_del_dia?.toFixed(2) || '0.00'}`,
       icon: DollarSign,
       color: 'bg-red-600',
-      trend: '+12%'
+      trend: statistics.tendencia_ventas || '+0%'
     },
     {
       label: 'Pedidos',
-      value: '48',
+      value: statistics.pedidos_totales?.toString() || '0',
       icon: ShoppingCart,
       color: 'bg-orange-600',
-      trend: '+5%'
+      trend: statistics.tendencia_pedidos || '+0%'
     },
     {
       label: 'Nuevos Clientes',
-      value: '12',
+      value: statistics.nuevos_clientes?.toString() || '0',
       icon: Users,
       color: 'bg-green-600',
-      trend: '+8%'
+      trend: statistics.tendencia_clientes || '+0%'
     },
     {
       label: 'Ingresos Mensuales',
-      value: 'S/. 45,200',
+      value: `S/. ${statistics.ingresos_mensuales?.toFixed(2) || '0.00'}`,
       icon: TrendingUp,
       color: 'bg-blue-600',
-      trend: '+15%'
+      trend: statistics.tendencia_ingresos || '+0%'
     }
-  ]
+  ] : []
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
+              <div className="h-20 bg-gray-200 rounded"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600 text-sm">{error}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -82,25 +141,27 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Platos Top</h3>
           <div className="space-y-4">
-            {[
-              { name: 'Arroz Chaufa', orders: 156 },
-              { name: 'Tallarín Saltado', orders: 142 },
-              { name: 'Wantán Frito', orders: 128 },
-              { name: 'Combos', orders: 95 }
-            ].map((dish) => (
-              <div key={dish.name}>
-                <div className="flex justify-between mb-2">
-                  <p className="text-sm font-medium text-gray-900">{dish.name}</p>
-                  <p className="text-sm font-semibold text-red-600">{dish.orders}</p>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-red-600 rounded-full"
-                    style={{ width: `${(dish.orders / 156) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+            {topProducts.length > 0 ? (
+              topProducts.map((product) => {
+                const maxSold = topProducts[0]?.cantidad_vendida || 1
+                return (
+                  <div key={product.producto_id}>
+                    <div className="flex justify-between mb-2">
+                      <p className="text-sm font-medium text-gray-900">{product.nombre}</p>
+                      <p className="text-sm font-semibold text-red-600">{product.cantidad_vendida}</p>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-red-600 rounded-full"
+                        style={{ width: `${(product.cantidad_vendida / maxSold) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })
+            ) : (
+              <p className="text-sm text-gray-500">No hay datos disponibles</p>
+            )}
           </div>
         </div>
       </div>

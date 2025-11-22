@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User, AuthState } from '@/lib/types/auth'
 import { authService } from '@/lib/services/auth-service'
+import { localService } from '@/lib/services/local-service'
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>
@@ -42,22 +43,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await authService.login(email, password)
       
-      if (response.usuario) {
-        // Determine role from email or API response
+      if (response.usuario && response.token) {
+        // Determine role from API response
         let role: 'admin' | 'gerente' = 'gerente'
-        if (email.includes('admin@')) {
-          role = 'admin'
-        } else if (email.includes('gerente')) {
-          role = 'gerente'
-        } else if (response.usuario.rol) {
-          role = response.usuario.rol.toLowerCase() === 'admin' ? 'admin' : 'gerente'
+        if (response.usuario.role) {
+          role = response.usuario.role.toLowerCase() === 'admin' ? 'admin' : 'gerente'
         }
 
         const newUser: User = {
-          id: response.usuario.id,
+          id: response.usuario.id || response.usuario.correo,
           name: response.usuario.nombre,
           email: response.usuario.correo,
           role
+        }
+
+        // If user is gerente, find their local_id
+        if (role === 'gerente') {
+          try {
+            const local = await localService.findLocalByGerenteEmail(response.usuario.correo)
+            if (local) {
+              newUser.local_id = local.local_id
+              console.log('Local ID found for gerente:', local.local_id)
+            } else {
+              console.warn('No local found for gerente:', response.usuario.correo)
+            }
+          } catch (error) {
+            console.error('Error fetching local_id:', error)
+            // Continue with login even if local fetch fails
+          }
         }
         
         localStorage.setItem('user', JSON.stringify(newUser))
@@ -77,9 +90,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await authService.register(name, email, password)
       
-      if (response.id || response.correo) {
-        // After registration, log in automatically
-        await login(email, password)
+      if (response.usuario && response.token) {
+        // Determine role from API response
+        let role: 'admin' | 'gerente' = 'gerente'
+        if (response.usuario.role) {
+          role = response.usuario.role.toLowerCase() === 'admin' ? 'admin' : 'gerente'
+        }
+
+        const newUser: User = {
+          id: response.usuario.correo,
+          name: response.usuario.nombre,
+          email: response.usuario.correo,
+          role
+        }
+
+        // If user is gerente, find their local_id
+        if (role === 'gerente') {
+          try {
+            const local = await localService.findLocalByGerenteEmail(response.usuario.correo)
+            if (local) {
+              newUser.local_id = local.local_id
+              console.log('Local ID found for gerente:', local.local_id)
+            }
+          } catch (error) {
+            console.error('Error fetching local_id:', error)
+          }
+        }
+        
+        localStorage.setItem('user', JSON.stringify(newUser))
+        setUser(newUser)
+        setIsAuthenticated(true)
+        router.push('/')
       } else {
         throw new Error('Error en el registro')
       }
