@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Menu, LogOut, Home, ShoppingCart, BarChart3, Utensils, Users, Settings } from 'lucide-react'
+import { useAuth } from '@/lib/contexts/auth-context'
 import Dashboard from '@/components/pages/Dashboard'
 import MenuManagement from '@/components/pages/MenuManagement'
 import Orders from '@/components/pages/Orders'
@@ -15,6 +17,26 @@ type Page = 'dashboard' | 'menu' | 'orders' | 'analytics' | 'promotions' | 'cust
 export default function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, isLoading, router])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return null
+  }
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -96,7 +118,10 @@ export default function AdminDashboard() {
 
         {/* Logout */}
         <div className="p-4 border-t border-gray-800">
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-red-600 hover:bg-gray-800 rounded-lg transition">
+          <button 
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-red-600 hover:bg-gray-800 rounded-lg transition"
+          >
             <LogOut size={20} />
             {sidebarOpen && <span className="text-sm font-medium">Cerrar sesión</span>}
           </button>
@@ -112,11 +137,12 @@ export default function AdminDashboard() {
           </h1>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">Admin Manager</p>
-              <p className="text-xs text-gray-500">admin@chinawok.com</p>
+              <p className="text-sm font-medium text-gray-900">{user?.name || 'Usuario'}</p>
+              <p className="text-xs text-gray-500">{user?.email}</p>
+              <p className="text-xs text-red-600 font-medium capitalize">{user?.role}</p>
             </div>
             <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white font-bold">
-              A
+              {user?.name?.charAt(0).toUpperCase() || 'U'}
             </div>
           </div>
         </div>
