@@ -1,9 +1,9 @@
 'use client'
 
-import { Plus, Edit, Trash2, Search, Package, DollarSign, Grid3x3, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Edit, Trash2, Search, Package, DollarSign, Grid3x3, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLocalId } from '@/hooks/use-local-id'
-import { productoService, Producto } from '@/lib/services/producto-service'
+import { productoService, Producto, CreateProductoRequest } from '@/lib/services/producto-service'
 
 export default function MenuManagement() {
   const localId = useLocalId()
@@ -14,6 +14,22 @@ export default function MenuManagement() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const [deletingNombre, setDeletingNombre] = useState<string | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [selectedProducto, setSelectedProducto] = useState<Producto | null>(null)
+  const [formData, setFormData] = useState<Omit<CreateProductoRequest, 'local_id'>>({
+    nombre: '',
+    precio: 0,
+    descripcion: '',
+    categoria: '',
+    stock: 0
+  })
+  const [editFormData, setEditFormData] = useState({
+    precio: 0,
+    stock: 0
+  })
 
   useEffect(() => {
     const fetchProductos = async () => {
@@ -57,6 +73,94 @@ export default function MenuManagement() {
       alert(error instanceof Error ? error.message : 'Error al eliminar producto')
     } finally {
       setDeletingNombre(null)
+    }
+  }
+
+  const handleCreateProducto = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!localId) {
+      alert('No se pudo obtener el ID del local')
+      return
+    }
+
+    setIsCreating(true)
+    try {
+      const response = await productoService.createProducto({
+        ...formData,
+        local_id: localId
+      })
+      
+      // Agregar el nuevo producto a la lista
+      setProductos([...productos, {
+        local_id: response.data.local_id,
+        nombre: response.data.nombre,
+        precio: response.data.precio.toString(),
+        descripcion: response.data.descripcion,
+        categoria: response.data.categoria,
+        stock: response.data.stock.toString()
+      }])
+      
+      alert('Producto creado exitosamente')
+      setIsModalOpen(false)
+      setFormData({
+        nombre: '',
+        precio: 0,
+        descripcion: '',
+        categoria: '',
+        stock: 0
+      })
+    } catch (error) {
+      console.error('Error al crear producto:', error)
+      alert(error instanceof Error ? error.message : 'Error al crear producto')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleOpenEditModal = (producto: Producto) => {
+    setSelectedProducto(producto)
+    setEditFormData({
+      precio: parseFloat(producto.precio),
+      stock: parseInt(producto.stock)
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleUpdateProducto = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!localId || !selectedProducto) {
+      alert('No se pudo obtener el ID del local o el producto')
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      const response = await productoService.updateProducto({
+        local_id: localId,
+        nombre: selectedProducto.nombre,
+        precio: editFormData.precio,
+        stock: editFormData.stock
+      })
+      
+      // Actualizar el producto en la lista
+      setProductos(productos.map(p => 
+        p.nombre === selectedProducto.nombre
+          ? {
+              ...p,
+              precio: response.data.precio,
+              stock: response.data.stock
+            }
+          : p
+      ))
+      
+      alert('Producto actualizado exitosamente')
+      setIsEditModalOpen(false)
+      setSelectedProducto(null)
+    } catch (error) {
+      console.error('Error al actualizar producto:', error)
+      alert(error instanceof Error ? error.message : 'Error al actualizar producto')
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -175,7 +279,10 @@ export default function MenuManagement() {
             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
           />
         </div>
-        <button className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-medium">
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-medium"
+        >
           <Plus size={20} />
           Nuevo Plato
         </button>
@@ -191,7 +298,7 @@ export default function MenuManagement() {
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Descripción</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Precio</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Stock</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Acciones</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase w-32">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -221,21 +328,28 @@ export default function MenuManagement() {
                       {producto.stock} unid.
                     </span>
                   </td>
-                  <td className="px-6 py-4 flex gap-2">
-                    <button className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition">
-                      <Edit size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteProducto(producto.nombre)}
-                      disabled={deletingNombre === producto.nombre}
-                      className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {deletingNombre === producto.nombre ? (
-                        <div className="animate-spin rounded-full h-[18px] w-[18px] border-b-2 border-red-600"></div>
-                      ) : (
-                        <Trash2 size={18} />
-                      )}
-                    </button>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-2 items-center">
+                      <button 
+                        onClick={() => handleOpenEditModal(producto)}
+                        className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition"
+                        title="Editar producto"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteProducto(producto.nombre)}
+                        disabled={deletingNombre === producto.nombre}
+                        className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Eliminar producto"
+                      >
+                        {deletingNombre === producto.nombre ? (
+                          <div className="animate-spin rounded-full h-[18px] w-[18px] border-b-2 border-red-600"></div>
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -291,6 +405,229 @@ export default function MenuManagement() {
             >
               <ChevronRight size={20} className="text-gray-600" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Creación */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <h2 className="text-xl font-bold text-gray-900">Crear Nuevo Producto</h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateProducto} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre del Producto *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
+                  placeholder="Ej: Arroz Chaufa Especial"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Categoría *
+                  </label>
+                  <select
+                    required
+                    value={formData.categoria}
+                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
+                  >
+                    <option value="">Seleccionar categoría</option>
+                    <option value="Arroces">Arroces</option>
+                    <option value="Tallarines">Tallarines</option>
+                    <option value="Pollo">Pollo</option>
+                    <option value="Carne">Carne</option>
+                    <option value="Mariscos">Mariscos</option>
+                    <option value="Sopas">Sopas</option>
+                    <option value="Bebidas">Bebidas</option>
+                    <option value="Postres">Postres</option>
+                    <option value="Entradas">Entradas</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Precio (S/.) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.precio}
+                    onChange={(e) => setFormData({ ...formData, precio: parseFloat(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stock Inicial *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={formData.stock}
+                  onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
+                  placeholder="Ej: 50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Descripción *
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
+                  placeholder="Describe el producto..."
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition font-medium text-gray-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="flex-1 bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isCreating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Creando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={20} />
+                      Crear Producto
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edición */}
+      {isEditModalOpen && selectedProducto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Editar Producto</h2>
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(false)
+                  setSelectedProducto(null)
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateProducto} className="p-6 space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600">Producto</p>
+                <p className="font-bold text-gray-900 text-lg">{selectedProducto.nombre}</p>
+                <p className="text-sm text-gray-500">{selectedProducto.categoria}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Precio (S/.) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={editFormData.precio}
+                  onChange={(e) => setEditFormData({ ...editFormData, precio: parseFloat(e.target.value) })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Precio actual: S/. {parseFloat(selectedProducto.precio).toFixed(2)}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stock *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={editFormData.stock}
+                  onChange={(e) => setEditFormData({ ...editFormData, stock: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Stock actual: {selectedProducto.stock} unidades
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false)
+                    setSelectedProducto(null)
+                  }}
+                  className="flex-1 px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition font-medium text-gray-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isUpdating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Actualizando...
+                    </>
+                  ) : (
+                    <>
+                      <Edit size={20} />
+                      Actualizar
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

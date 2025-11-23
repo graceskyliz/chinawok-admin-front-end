@@ -1,6 +1,6 @@
 'use client'
 
-import { MapPin, Phone, Clock, CheckCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { MapPin, Phone, Clock, CheckCircle, Trash2, ChevronLeft, ChevronRight, X, User, Package } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { useLocalId } from '@/hooks/use-local-id'
 import { pedidoService, Pedido } from '@/lib/services/pedido-service'
@@ -14,6 +14,9 @@ export default function Orders() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedOrder, setSelectedOrder] = useState<Pedido | null>(null)
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchPedidos = async () => {
@@ -70,6 +73,32 @@ export default function Orders() {
     } finally {
       setDeletingId(null)
     }
+  }
+
+  const handleViewDetails = async (pedidoId: string) => {
+    if (!localId) {
+      alert('No se pudo obtener el ID del local')
+      return
+    }
+
+    setIsLoadingDetails(true)
+    setIsModalOpen(true)
+    
+    try {
+      const response = await pedidoService.getPedidoById(localId, pedidoId)
+      setSelectedOrder(response.data)
+    } catch (error) {
+      console.error('Error al cargar detalles del pedido:', error)
+      alert(error instanceof Error ? error.message : 'Error al cargar detalles del pedido')
+      setIsModalOpen(false)
+    } finally {
+      setIsLoadingDetails(false)
+    }
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setSelectedOrder(null)
   }
 
   const getStatusColor = (status: string) => {
@@ -191,7 +220,10 @@ export default function Orders() {
                     {getStatusLabel(order.estado)}
                   </span>
                   <div className="flex gap-2 mt-2">
-                    <button className="text-sm font-medium text-red-600 hover:text-red-700">
+                    <button 
+                      onClick={() => handleViewDetails(order.pedido_id)}
+                      className="text-sm font-medium text-red-600 hover:text-red-700"
+                    >
                       Ver Detalles →
                     </button>
                     <button
@@ -265,6 +297,152 @@ export default function Orders() {
             >
               <ChevronRight size={20} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalles */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <h2 className="text-xl font-bold text-gray-900">Detalles del Pedido</h2>
+              <button
+                onClick={closeModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+            
+            {isLoadingDetails ? (
+              <div className="p-12 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+              </div>
+            ) : selectedOrder ? (
+              <div className="p-6 space-y-6">
+                {/* Order Header */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">ID del Pedido</p>
+                      <p className="font-mono text-sm text-gray-900">{selectedOrder.pedido_id}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Estado</p>
+                      <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(selectedOrder.estado)}`}>
+                        {getStatusLabel(selectedOrder.estado)}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total</p>
+                      <p className="text-2xl font-bold text-red-600">S/. {selectedOrder.costo}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Entrega Aprox.</p>
+                      <p className="text-sm text-gray-900">{new Date(selectedOrder.fecha_entrega_aproximada).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Customer Info */}
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <User size={20} className="text-blue-600" />
+                    Información del Cliente
+                  </h3>
+                  <div className="bg-blue-50 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Correo:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedOrder.usuario_correo}</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <MapPin size={16} className="text-gray-600 mt-1" />
+                      <span className="text-sm text-gray-900">{selectedOrder.direccion}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Products */}
+                {selectedOrder.productos && selectedOrder.productos.length > 0 && (
+                  <div>
+                    <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <Package size={20} className="text-orange-600" />
+                      Productos ({selectedOrder.productos.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {selectedOrder.productos.map((producto, idx) => (
+                        <div key={idx} className="bg-orange-50 rounded-lg p-3 flex items-center justify-between">
+                          <span className="font-medium text-gray-900">{producto.nombre}</span>
+                          <span className="px-3 py-1 bg-orange-200 text-orange-800 rounded-full text-sm font-semibold">
+                            x{producto.cantidad}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Combos */}
+                {selectedOrder.combos && selectedOrder.combos.length > 0 && (
+                  <div>
+                    <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <Package size={20} className="text-purple-600" />
+                      Combos ({selectedOrder.combos.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {selectedOrder.combos.map((combo, idx) => (
+                        <div key={idx} className="bg-purple-50 rounded-lg p-3 flex items-center justify-between">
+                          <span className="font-medium text-gray-900">Combo ID: {combo.combo_id}</span>
+                          <span className="px-3 py-1 bg-purple-200 text-purple-800 rounded-full text-sm font-semibold">
+                            x{combo.cantidad}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Order History */}
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <Clock size={20} className="text-green-600" />
+                    Historial de Estados
+                  </h3>
+                  <div className="space-y-3">
+                    {selectedOrder.historial_estados.map((historial, idx) => (
+                      <div key={idx} className={`rounded-lg p-4 border-l-4 ${historial.activo ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-gray-50'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`font-semibold ${historial.activo ? 'text-green-700' : 'text-gray-700'}`}>
+                            {getStatusLabel(historial.estado)}
+                          </span>
+                          {historial.activo && (
+                            <span className="px-2 py-1 bg-green-200 text-green-800 text-xs font-semibold rounded-full">
+                              ACTIVO
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <p>Inicio: {new Date(historial.hora_inicio).toLocaleString()}</p>
+                          <p>Fin: {new Date(historial.hora_fin).toLocaleString()}</p>
+                          {historial.empleado && (
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                              <p className="font-medium text-gray-700">Empleado: {historial.empleado.nombre_completo}</p>
+                              <p>DNI: {historial.empleado.dni} • Rol: {historial.empleado.rol}</p>
+                              <p>Calificación: ⭐ {parseFloat(historial.empleado.calificacion_prom).toFixed(2)}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-12 text-center text-gray-500">
+                No se pudieron cargar los detalles
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useLocalId } from '@/hooks/use-local-id'
 import { ofertaService, Oferta } from '@/lib/services/oferta-service'
-import { Tag, Calendar, Percent, Package, Utensils, Plus, Edit, Trash2, Clock } from 'lucide-react'
+import { Tag, Calendar, Percent, Package, Utensils, Plus, Edit, Trash2, Clock, X } from 'lucide-react'
 
 export default function Ofertas() {
   const localId = useLocalId()
@@ -11,6 +11,14 @@ export default function Ofertas() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [selectedOferta, setSelectedOferta] = useState<Oferta | null>(null)
+  const [editFormData, setEditFormData] = useState({
+    producto_nombre: '',
+    porcentaje_descuento: 0,
+    fecha_limite: ''
+  })
 
   useEffect(() => {
     const fetchOfertas = async () => {
@@ -75,6 +83,63 @@ export default function Ofertas() {
       alert(error instanceof Error ? error.message : 'Error al eliminar oferta')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const handleOpenEditModal = (oferta: Oferta) => {
+    setSelectedOferta(oferta)
+    // Formatear fecha para input datetime-local
+    const fechaLimite = new Date(oferta.fecha_limite)
+    const fechaFormateada = fechaLimite.toISOString().slice(0, 16)
+    
+    setEditFormData({
+      producto_nombre: oferta.producto_nombre || '',
+      porcentaje_descuento: parseFloat(oferta.porcentaje_descuento),
+      fecha_limite: fechaFormateada
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleUpdateOferta = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!localId || !selectedOferta) {
+      alert('No se pudo obtener el ID del local o la oferta')
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      // Convertir fecha local a formato ISO
+      const fechaLimiteISO = new Date(editFormData.fecha_limite).toISOString()
+      
+      const response = await ofertaService.updateOferta({
+        local_id: localId,
+        oferta_id: selectedOferta.oferta_id,
+        producto_nombre: editFormData.producto_nombre || undefined,
+        porcentaje_descuento: editFormData.porcentaje_descuento,
+        fecha_limite: fechaLimiteISO
+      })
+      
+      // Actualizar la oferta en la lista
+      setOfertas(ofertas.map(o => 
+        o.oferta_id === selectedOferta.oferta_id
+          ? {
+              ...o,
+              producto_nombre: response.data.producto_nombre,
+              porcentaje_descuento: response.data.porcentaje_descuento,
+              fecha_limite: response.data.fecha_limite
+            }
+          : o
+      ))
+      
+      alert('Oferta actualizada exitosamente')
+      setIsEditModalOpen(false)
+      setSelectedOferta(null)
+    } catch (error) {
+      console.error('Error al actualizar oferta:', error)
+      alert(error instanceof Error ? error.message : 'Error al actualizar oferta')
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -244,7 +309,10 @@ export default function Ofertas() {
 
                 {/* Acciones */}
                 <div className="flex gap-2">
-                  <button className="flex-1 py-2 px-4 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition flex items-center justify-center gap-2 font-medium">
+                  <button 
+                    onClick={() => handleOpenEditModal(oferta)}
+                    className="flex-1 py-2 px-4 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition flex items-center justify-center gap-2 font-medium"
+                  >
                     <Edit size={16} />
                     Editar
                   </button>
@@ -281,6 +349,123 @@ export default function Ofertas() {
             <Plus size={20} />
             Crear Oferta
           </button>
+        </div>
+      )}
+
+      {/* Modal de Edición */}
+      {isEditModalOpen && selectedOferta && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Editar Oferta</h2>
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(false)
+                  setSelectedOferta(null)
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateOferta} className="p-6 space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                <div>
+                  <p className="text-xs text-gray-500">ID de Oferta</p>
+                  <p className="text-sm font-mono text-gray-900">{selectedOferta.oferta_id}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Tipo</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {selectedOferta.producto_nombre ? `Producto: ${selectedOferta.producto_nombre}` : `Combo: ${selectedOferta.combo_id}`}
+                  </p>
+                </div>
+              </div>
+
+              {selectedOferta.producto_nombre && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre del Producto
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.producto_nombre}
+                    onChange={(e) => setEditFormData({ ...editFormData, producto_nombre: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    placeholder="Nombre del producto"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Porcentaje de Descuento *
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    max="100"
+                    value={editFormData.porcentaje_descuento}
+                    onChange={(e) => setEditFormData({ ...editFormData, porcentaje_descuento: parseFloat(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                  <Percent size={20} className="absolute right-3 top-2.5 text-gray-400" />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Descuento actual: {selectedOferta.porcentaje_descuento}%
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fecha Límite *
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={editFormData.fecha_limite}
+                  onChange={(e) => setEditFormData({ ...editFormData, fecha_limite: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Fecha actual: {formatDate(selectedOferta.fecha_limite)}
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false)
+                    setSelectedOferta(null)
+                  }}
+                  className="flex-1 px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition font-medium text-gray-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isUpdating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Actualizando...
+                    </>
+                  ) : (
+                    <>
+                      <Edit size={20} />
+                      Actualizar
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

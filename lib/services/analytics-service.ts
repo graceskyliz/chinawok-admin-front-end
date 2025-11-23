@@ -54,15 +54,49 @@ export interface ProductAnalytics {
   productos: Producto[]
 }
 
+export interface Estadisticas {
+  local_id: string
+  direccion: string
+  telefono: string
+  hora_apertura: string
+  hora_finalizacion: string
+  gerente_nombre: string
+  gerente_correo: string
+  total_pedidos: string
+  clientes_unicos: string
+  revenue_total: string
+  ticket_promedio: string
+  pedido_minimo: string
+  pedido_maximo: string
+  pedidos_completados: string
+  pedidos_en_envio: string
+  pedidos_empacando: string
+  pedidos_cocinando: string
+  pedidos_eligiendo: string
+  tasa_completado_pct: string
+  total_productos: string
+  inventario_total: string
+  productos_stock_bajo: string
+  productos_sin_stock: string
+  total_empleados: string
+  cocineros: string
+  despachadores: string
+  repartidores: string
+  calificacion_staff: string
+  nomina_mensual: string
+  ofertas_activas: string
+  descuento_promedio_pct: string
+  total_combos: string
+  combos_disponibles: string
+  total_resenas: string
+  calificacion_cliente: string
+  resenas_excelentes: string
+  resenas_malas: string
+}
+
 export interface StatisticsAnalytics {
-  ventas_del_dia: number
-  pedidos_totales: number
-  nuevos_clientes: number
-  ingresos_mensuales: number
-  tendencia_ventas?: string
-  tendencia_pedidos?: string
-  tendencia_clientes?: string
-  tendencia_ingresos?: string
+  local_id: string
+  estadisticas: Estadisticas
 }
 
 export interface ActivateAnalyticsResponse {

@@ -23,6 +23,27 @@ export interface DeleteOfertaResponse {
   }
 }
 
+export interface UpdateOfertaRequest {
+  local_id: string
+  oferta_id: string
+  producto_nombre?: string
+  porcentaje_descuento: number
+  fecha_limite: string
+}
+
+export interface UpdateOfertaResponse {
+  message: string
+  data: {
+    local_id: string
+    oferta_id: string
+    combo_id?: string
+    producto_nombre?: string
+    porcentaje_descuento: string
+    fecha_limite: string
+    fecha_inicio: string
+  }
+}
+
 class OfertaService {
   private get baseUrl(): string {
     return getApiUrl('pedidos')
@@ -70,6 +91,19 @@ class OfertaService {
       return data
     } catch (error) {
       console.error('Error deleting oferta:', error)
+      throw error
+    }
+  }
+
+  async updateOferta(request: UpdateOfertaRequest): Promise<UpdateOfertaResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/ofertas`, {
+        method: 'PUT',
+        body: JSON.stringify(request),
+      })
+      return data
+    } catch (error) {
+      console.error('Error updating oferta:', error)
       throw error
     }
   }

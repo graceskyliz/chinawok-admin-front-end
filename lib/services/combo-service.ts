@@ -15,6 +15,33 @@ export interface CombosResponse {
   count?: number
 }
 
+export interface UpdateComboRequest {
+  local_id: string
+  combo_id: string
+  nombre: string
+  productos_nombres: string[]
+  descripcion?: string
+}
+
+export interface UpdateComboResponse {
+  message: string
+  data: {
+    combo_id: string
+    local_id: string
+    nombre: string
+    descripcion: string
+    productos_nombres: string[]
+  }
+}
+
+export interface DeleteComboResponse {
+  message: string
+  data: {
+    local_id: string
+    combo_id: string
+  }
+}
+
 class ComboService {
   private get baseUrl(): string {
     return getApiUrl('pedidos')
@@ -59,6 +86,34 @@ class ComboService {
       return data
     } catch (error) {
       console.error('Error fetching combo:', error)
+      throw error
+    }
+  }
+
+  async updateCombo(request: UpdateComboRequest): Promise<UpdateComboResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/combos`, {
+        method: 'PUT',
+        body: JSON.stringify(request),
+      })
+      return data
+    } catch (error) {
+      console.error('Error updating combo:', error)
+      throw error
+    }
+  }
+
+  async deleteCombo(localId: string, comboId: string): Promise<DeleteComboResponse> {
+    try {
+      const data = await this.fetchWithAuth(
+        `${this.baseUrl}/combos?local_id=${localId}&combo_id=${comboId}`,
+        {
+          method: 'DELETE',
+        }
+      )
+      return data
+    } catch (error) {
+      console.error('Error deleting combo:', error)
       throw error
     }
   }

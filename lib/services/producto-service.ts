@@ -22,6 +22,46 @@ export interface DeleteProductoResponse {
   }
 }
 
+export interface CreateProductoRequest {
+  local_id: string
+  nombre: string
+  precio: number
+  descripcion: string
+  categoria: string
+  stock: number
+}
+
+export interface CreateProductoResponse {
+  message: string
+  data: {
+    local_id: string
+    nombre: string
+    precio: number
+    descripcion: string
+    categoria: string
+    stock: number
+  }
+}
+
+export interface UpdateProductoRequest {
+  local_id: string
+  nombre: string
+  precio?: number
+  stock?: number
+}
+
+export interface UpdateProductoResponse {
+  message: string
+  data: {
+    local_id: string
+    nombre: string
+    stock: string
+    descripcion: string
+    categoria: string
+    precio: string
+  }
+}
+
 class ProductoService {
   private get baseUrl(): string {
     return getApiUrl('pedidos')
@@ -81,6 +121,32 @@ class ProductoService {
       return data
     } catch (error) {
       console.error('Error deleting producto:', error)
+      throw error
+    }
+  }
+
+  async createProducto(request: CreateProductoRequest): Promise<CreateProductoResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/productos`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      })
+      return data
+    } catch (error) {
+      console.error('Error creating producto:', error)
+      throw error
+    }
+  }
+
+  async updateProducto(request: UpdateProductoRequest): Promise<UpdateProductoResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/productos`, {
+        method: 'PUT',
+        body: JSON.stringify(request),
+      })
+      return data
+    } catch (error) {
+      console.error('Error updating producto:', error)
       throw error
     }
   }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { analyticsService, ProductAnalytics, PersonalAnalytics, DailyAnalytics } from '@/lib/services/analytics-service'
+import { analyticsService, ProductAnalytics, PersonalAnalytics, DailyAnalytics, StatisticsAnalytics } from '@/lib/services/analytics-service'
 import { TrendingUp, Users, Package, Clock, Star, DollarSign, Calendar, Award } from 'lucide-react'
 import { useLocalId } from '@/hooks/use-local-id'
 
@@ -10,6 +10,7 @@ export default function Analytics() {
   const [products, setProducts] = useState<ProductAnalytics | null>(null)
   const [personal, setPersonal] = useState<PersonalAnalytics | null>(null)
   const [dailyData, setDailyData] = useState<DailyAnalytics | null>(null)
+  const [statistics, setStatistics] = useState<StatisticsAnalytics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -21,15 +22,17 @@ export default function Analytics() {
       }
 
       try {
-        const [productsData, personalData, daily] = await Promise.all([
+        const [productsData, personalData, daily, stats] = await Promise.all([
           analyticsService.getProductAnalytics(localId),
           analyticsService.getPersonalAnalytics(localId),
-          analyticsService.getDailyAnalytics(localId)
+          analyticsService.getDailyAnalytics(localId),
+          analyticsService.getStatistics(localId)
         ])
         
         setProducts(productsData)
         setPersonal(personalData)
         setDailyData(daily)
+        setStatistics(stats)
       } catch (err) {
         console.error('Error fetching analytics:', err)
         setError(err instanceof Error ? err.message : 'Error al cargar analítica')
@@ -64,10 +67,12 @@ export default function Analytics() {
     )
   }
 
-  // Calculate totals for daily data
-  const totalRevenue = dailyData?.record_diario.reduce((sum, day) => sum + parseFloat(day.revenue_diario), 0) || 0
-  const totalOrders = dailyData?.record_diario.reduce((sum, day) => sum + parseInt(day.total_pedidos), 0) || 0
-  const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0
+  // Get statistics from API
+  const stats = statistics?.estadisticas
+  const totalRevenue = parseFloat(stats?.revenue_total || '0')
+  const totalOrders = parseInt(stats?.total_pedidos || '0')
+  const avgTicket = parseFloat(stats?.ticket_promedio || '0')
+  const totalEmpleados = parseInt(stats?.total_empleados || '0')
 
   return (
     <div className="space-y-6">
@@ -78,7 +83,10 @@ export default function Analytics() {
             <Users size={24} />
             <h3 className="font-semibold">Total Empleados</h3>
           </div>
-          <p className="text-3xl font-bold">{personal?.total_empleados || 0}</p>
+          <p className="text-3xl font-bold">{totalEmpleados}</p>
+          <p className="text-sm opacity-90 mt-1">
+            {stats?.cocineros || 0} cocineros • {stats?.repartidores || 0} repartidores
+          </p>
         </div>
         
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white">
@@ -87,7 +95,7 @@ export default function Analytics() {
             <h3 className="font-semibold">Revenue Total</h3>
           </div>
           <p className="text-3xl font-bold">S/. {totalRevenue.toFixed(2)}</p>
-          <p className="text-sm opacity-90 mt-1">{dailyData?.total_dias || 0} días</p>
+          <p className="text-sm opacity-90 mt-1">{stats?.clientes_unicos || 0} clientes únicos</p>
         </div>
         
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-6 text-white">
@@ -96,6 +104,7 @@ export default function Analytics() {
             <h3 className="font-semibold">Pedidos Totales</h3>
           </div>
           <p className="text-3xl font-bold">{totalOrders}</p>
+          <p className="text-sm opacity-90 mt-1">{stats?.pedidos_completados || 0} completados ({stats?.tasa_completado_pct || 0}%)</p>
         </div>
         
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-6 text-white">
@@ -104,6 +113,7 @@ export default function Analytics() {
             <h3 className="font-semibold">Ticket Promedio</h3>
           </div>
           <p className="text-3xl font-bold">S/. {avgTicket.toFixed(2)}</p>
+          <p className="text-sm opacity-90 mt-1">Min: S/. {parseFloat(stats?.pedido_minimo || '0').toFixed(2)} • Max: S/. {parseFloat(stats?.pedido_maximo || '0').toFixed(2)}</p>
         </div>
       </div>
 
@@ -256,9 +266,16 @@ export default function Analytics() {
               <tfoot>
                 <tr className="bg-gray-50 font-bold">
                   <td className="py-3 px-4 text-gray-900">Total ({dailyData.total_dias} días)</td>
-                  <td className="text-right py-3 px-4 text-gray-900">{totalOrders} pedidos</td>
-                  <td className="text-right py-3 px-4 text-green-600">S/. {totalRevenue.toFixed(2)}</td>
-                  <td className="text-right py-3 px-4 text-gray-900">S/. {avgTicket.toFixed(2)}</td>
+                  <td className="text-right py-3 px-4 text-gray-900">
+                    {dailyData.record_diario.reduce((sum, day) => sum + parseInt(day.total_pedidos), 0)} pedidos
+                  </td>
+                  <td className="text-right py-3 px-4 text-green-600">
+                    S/. {dailyData.record_diario.reduce((sum, day) => sum + parseFloat(day.revenue_diario), 0).toFixed(2)}
+                  </td>
+                  <td className="text-right py-3 px-4 text-gray-900">
+                    S/. {(dailyData.record_diario.reduce((sum, day) => sum + parseFloat(day.revenue_diario), 0) / 
+                         dailyData.record_diario.reduce((sum, day) => sum + parseInt(day.total_pedidos), 0)).toFixed(2)}
+                  </td>
                 </tr>
               </tfoot>
             </table>

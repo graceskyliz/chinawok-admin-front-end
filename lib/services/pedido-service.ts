@@ -42,6 +42,10 @@ export interface PedidosResponse {
   data: Pedido[]
 }
 
+export interface PedidoByIdResponse {
+  data: Pedido
+}
+
 export interface DeletePedidoResponse {
   message: string
   data: {
@@ -82,6 +86,18 @@ class PedidoService {
       return data
     } catch (error) {
       console.error('Error fetching pedidos:', error)
+      throw error
+    }
+  }
+
+  async getPedidoById(localId: string, pedidoId: string): Promise<PedidoByIdResponse> {
+    try {
+      const data = await this.fetchWithAuth(
+        `${this.baseUrl}/pedidos?local_id=${localId}&pedido_id=${pedidoId}`
+      )
+      return data
+    } catch (error) {
+      console.error('Error fetching pedido:', error)
       throw error
     }
   }

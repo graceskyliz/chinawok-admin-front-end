@@ -46,27 +46,28 @@ export default function Dashboard() {
     fetchData()
   }, [localId])
 
-  const stats = statistics ? [
+  const estadisticas = statistics?.estadisticas
+  const stats = estadisticas ? [
     {
-      label: 'Ventas del Día',
-      value: `S/. ${statistics.ventas_del_dia?.toFixed(2) || '0.00'}`,
+      label: 'Revenue Total',
+      value: `S/. ${parseFloat(estadisticas.revenue_total || '0').toFixed(2)}`,
       icon: DollarSign,
       color: 'bg-red-600',
-      trend: statistics.tendencia_ventas || '+0%'
+      trend: `${estadisticas.tasa_completado_pct || '0'}% completados`
     },
     {
       label: 'Total Pedidos',
-      value: totalPedidos.toString(),
+      value: estadisticas.total_pedidos || '0',
       icon: ShoppingCart,
       color: 'bg-orange-600',
-      trend: '+0%'
+      trend: `${estadisticas.pedidos_completados || '0'} completados`
     },
     {
-      label: 'Ingresos Totales',
-      value: `S/. ${ingresosTotal.toFixed(2)}`,
+      label: 'Ticket Promedio',
+      value: `S/. ${parseFloat(estadisticas.ticket_promedio || '0').toFixed(2)}`,
       icon: TrendingUp,
       color: 'bg-blue-600',
-      trend: '+0%'
+      trend: `${estadisticas.clientes_unicos || '0'} clientes`
     }
   ] : []
 

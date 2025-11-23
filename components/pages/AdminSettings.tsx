@@ -1,4 +1,4 @@
-import { Save, Bell, Lock, User } from 'lucide-react'
+import { Save, Lock, User } from 'lucide-react'
 import { useState } from 'react'
 
 export default function AdminSettings() {
@@ -6,10 +6,7 @@ export default function AdminSettings() {
     storeName: 'Chinawok Lima Miraflores',
     email: 'admin@chinawok.com',
     phone: '01-6128000',
-    address: 'Av. Larco 123, Miraflores, Lima',
-    notifications: true,
-    emailAlerts: true,
-    smsAlerts: false
+    address: 'Av. Larco 123, Miraflores, Lima'
   })
 
   const handleChange = (field: string, value: any) => {
@@ -65,46 +62,6 @@ export default function AdminSettings() {
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
             />
           </div>
-        </div>
-      </div>
-
-      {/* Notifications */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <Bell className="text-red-600" size={24} />
-          <h3 className="text-lg font-bold text-gray-900">Notificaciones</h3>
-        </div>
-
-        <div className="space-y-4">
-          <label className="flex items-center p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-            <input
-              type="checkbox"
-              checked={settings.notifications}
-              onChange={(e) => handleChange('notifications', e.target.checked)}
-              className="w-5 h-5 accent-red-600 rounded cursor-pointer"
-            />
-            <span className="ml-3 text-gray-900 font-medium">Habilitar notificaciones</span>
-          </label>
-
-          <label className="flex items-center p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-            <input
-              type="checkbox"
-              checked={settings.emailAlerts}
-              onChange={(e) => handleChange('emailAlerts', e.target.checked)}
-              className="w-5 h-5 accent-red-600 rounded cursor-pointer"
-            />
-            <span className="ml-3 text-gray-900 font-medium">Alertas por Email</span>
-          </label>
-
-          <label className="flex items-center p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-            <input
-              type="checkbox"
-              checked={settings.smsAlerts}
-              onChange={(e) => handleChange('smsAlerts', e.target.checked)}
-              className="w-5 h-5 accent-red-600 rounded cursor-pointer"
-            />
-            <span className="ml-3 text-gray-900 font-medium">Alertas por SMS</span>
-          </label>
         </div>
       </div>
 
