@@ -3,21 +3,26 @@
 import { useEffect, useState } from 'react'
 import { useLocalId } from '@/hooks/use-local-id'
 import { comboService, Combo } from '@/lib/services/combo-service'
-import { Package, DollarSign, CheckCircle, XCircle, Grid3x3, Plus, Edit, Trash2, X } from 'lucide-react'
+import { Package, CheckCircle, XCircle, Grid3x3, Plus, Edit, Trash2, X } from 'lucide-react'
+
+const PRICE_REGEX = /^\d+(?:\.\d{0,2})?$/
 
 export default function Combos() {
   const localId = useLocalId()
   const [combos, setCombos] = useState<Combo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isCreateMode, setIsCreateMode] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [selectedCombo, setSelectedCombo] = useState<Combo | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [editFormData, setEditFormData] = useState({
+  const [formData, setFormData] = useState({
     nombre: '',
     descripcion: '',
-    productos_nombres: [] as string[]
+    productos_nombres: [] as string[],
+    precio: '',
+    disponible: true
   })
   const [newProductInput, setNewProductInput] = useState('')
 
@@ -45,73 +50,121 @@ export default function Combos() {
 
   const handleOpenEditModal = (combo: Combo) => {
     setSelectedCombo(combo)
-    setEditFormData({
+    setFormData({
       nombre: combo.nombre,
       descripcion: combo.descripcion || '',
-      productos_nombres: [...combo.productos_nombres]
+      productos_nombres: [...combo.productos_nombres],
+      precio: combo.precio ? combo.precio.toString() : '',
+      disponible: combo.disponible ?? true
     })
-    setIsEditModalOpen(true)
+    setIsCreateMode(false)
+    setIsModalOpen(true)
+  }
+
+  const handleOpenCreateModal = () => {
+    setSelectedCombo(null)
+    setFormData({
+      nombre: '',
+      descripcion: '',
+      productos_nombres: [],
+      precio: '',
+      disponible: true
+    })
+    setIsCreateMode(true)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSelectedCombo(null)
+    setIsCreateMode(false)
   }
 
   const handleAddProduct = () => {
     if (newProductInput.trim()) {
-      setEditFormData({
-        ...editFormData,
-        productos_nombres: [...editFormData.productos_nombres, newProductInput.trim()]
-      })
+      setFormData((prev) => ({
+        ...prev,
+        productos_nombres: [...prev.productos_nombres, newProductInput.trim()]
+      }))
       setNewProductInput('')
     }
   }
 
   const handleRemoveProduct = (index: number) => {
-    setEditFormData({
-      ...editFormData,
-      productos_nombres: editFormData.productos_nombres.filter((_, i) => i !== index)
-    })
+    setFormData((prev) => ({
+      ...prev,
+      productos_nombres: prev.productos_nombres.filter((_, i) => i !== index)
+    }))
   }
 
-  const handleUpdateCombo = async (e: React.FormEvent) => {
+  const handlePriceChange = (value: string) => {
+    if (value === '' || PRICE_REGEX.test(value)) {
+      setFormData((prev) => ({
+        ...prev,
+        precio: value
+      }))
+    }
+  }
+
+  const handleSaveCombo = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!localId || !selectedCombo) {
-      alert('No se pudo obtener el ID del local o el combo')
+    if (!localId) {
+      alert('No se pudo obtener el ID del local')
       return
     }
 
-    if (editFormData.productos_nombres.length === 0) {
+    if (!isCreateMode && !selectedCombo) {
+      alert('No se pudo determinar el combo a editar')
+      return
+    }
+
+    if (formData.productos_nombres.length === 0) {
       alert('Debe agregar al menos un producto al combo')
       return
     }
 
-    setIsUpdating(true)
+    setIsSaving(true)
     try {
-      const response = await comboService.updateCombo({
-        local_id: localId,
-        combo_id: selectedCombo.combo_id,
-        nombre: editFormData.nombre,
-        descripcion: editFormData.descripcion,
-        productos_nombres: editFormData.productos_nombres
-      })
-      
-      // Actualizar el combo en la lista
-      setCombos(combos.map(c => 
-        c.combo_id === selectedCombo.combo_id
-          ? {
-              ...c,
-              nombre: response.data.nombre,
-              descripcion: response.data.descripcion,
-              productos_nombres: response.data.productos_nombres
-            }
-          : c
-      ))
-      
-      alert('Combo actualizado exitosamente')
-      setIsEditModalOpen(false)
-      setSelectedCombo(null)
+      if (isCreateMode) {
+        const normalizedPrice = formData.precio.endsWith('.') ? formData.precio.slice(0, -1) : formData.precio
+        const response = await comboService.createCombo({
+          local_id: localId,
+          nombre: formData.nombre,
+          descripcion: formData.descripcion || undefined,
+          productos_nombres: formData.productos_nombres,
+          disponible: formData.disponible,
+          precio: normalizedPrice || undefined
+        })
+        setCombos((prev) => [response.data, ...prev])
+        alert('Combo creado exitosamente')
+      } else if (selectedCombo) {
+        const normalizedPrice = formData.precio.endsWith('.') ? formData.precio.slice(0, -1) : formData.precio
+        const response = await comboService.updateCombo({
+          local_id: localId,
+          combo_id: selectedCombo.combo_id,
+          nombre: formData.nombre,
+          descripcion: formData.descripcion || undefined,
+          productos_nombres: formData.productos_nombres,
+          disponible: formData.disponible,
+          precio: normalizedPrice || undefined
+        })
+        setCombos((prev) =>
+          prev.map((c) =>
+            c.combo_id === selectedCombo.combo_id ? response.data : c
+          )
+        )
+        alert('Combo actualizado exitosamente')
+      }
+      handleCloseModal()
     } catch (error) {
-      console.error('Error al actualizar combo:', error)
-      alert(error instanceof Error ? error.message : 'Error al actualizar combo')
+      console.error('Error al guardar combo:', error)
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al guardar el combo'
+      )
     } finally {
-      setIsUpdating(false)
+      setIsSaving(false)
     }
   }
 
@@ -236,7 +289,10 @@ export default function Combos() {
           <h2 className="text-2xl font-bold text-gray-900">Combos del Local</h2>
           <p className="text-sm text-gray-500 mt-1">Gestiona los combos disponibles</p>
         </div>
-        <button className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-medium">
+        <button
+          onClick={handleOpenCreateModal}
+          className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-medium"
+        >
           <Plus size={20} />
           Nuevo Combo
         </button>
@@ -328,35 +384,39 @@ export default function Combos() {
           <Package size={48} className="text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay combos registrados</h3>
           <p className="text-sm text-gray-600 mb-4">Crea tu primer combo para empezar</p>
-          <button className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition inline-flex items-center gap-2 font-medium">
+          <button
+            onClick={handleOpenCreateModal}
+            className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition inline-flex items-center gap-2 font-medium"
+          >
             <Plus size={20} />
             Crear Combo
           </button>
         </div>
       )}
 
-      {/* Modal de Edición */}
-      {isEditModalOpen && selectedCombo && (
+      {/* Modal de Creación/Edición */}
+      {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-              <h2 className="text-xl font-bold text-gray-900">Editar Combo</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                {isCreateMode ? 'Crear Combo' : 'Editar Combo'}
+              </h2>
               <button
-                onClick={() => {
-                  setIsEditModalOpen(false)
-                  setSelectedCombo(null)
-                }}
+                onClick={handleCloseModal}
                 className="p-2 hover:bg-gray-100 rounded-lg transition"
               >
                 <X size={20} className="text-gray-600" />
               </button>
             </div>
             
-            <form onSubmit={handleUpdateCombo} className="p-6 space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-xs text-gray-500">ID del Combo</p>
-                <p className="text-sm font-mono text-gray-900">{selectedCombo.combo_id}</p>
-              </div>
+            <form onSubmit={handleSaveCombo} className="p-6 space-y-4">
+              {!isCreateMode && selectedCombo && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500">ID del Combo</p>
+                  <p className="text-sm font-mono text-gray-900">{selectedCombo.combo_id}</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -365,8 +425,8 @@ export default function Combos() {
                 <input
                   type="text"
                   required
-                  value={editFormData.nombre}
-                  onChange={(e) => setEditFormData({ ...editFormData, nombre: e.target.value })}
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   placeholder="Ej: Combo Familiar Plus"
                 />
@@ -378,22 +438,56 @@ export default function Combos() {
                 </label>
                 <textarea
                   rows={3}
-                  value={editFormData.descripcion}
-                  onChange={(e) => setEditFormData({ ...editFormData, descripcion: e.target.value })}
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   placeholder="Describe el combo..."
                 />
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Precio (S/.)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    pattern="\\d+(\\.\\d{0,2})?"
+                    value={formData.precio}
+                    onChange={(e) => handlePriceChange(e.target.value.replace(',', '.'))}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    placeholder="Ej: 49.90"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Hasta 2 decimales (ej. 15.09, 12.8, 13)</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Disponibilidad
+                  </label>
+                  <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={formData.disponible}
+                      onChange={(e) => setFormData({ ...formData, disponible: e.target.checked })}
+                      className="h-4 w-4 text-red-600 rounded border-gray-300 focus:ring-red-500"
+                    />
+                    <span className="text-sm font-medium text-gray-900">
+                      {formData.disponible ? 'Disponible' : 'No disponible'}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Productos incluidos * ({editFormData.productos_nombres.length})
+                  Productos incluidos * ({formData.productos_nombres.length})
                 </label>
                 
                 {/* Lista de productos actuales */}
-                {editFormData.productos_nombres.length > 0 && (
+                {formData.productos_nombres.length > 0 && (
                   <div className="mb-3 space-y-2">
-                    {editFormData.productos_nombres.map((producto, index) => (
+                    {formData.productos_nombres.map((producto, index) => (
                       <div key={index} className="flex items-center gap-2 bg-blue-50 rounded-lg p-3">
                         <Package size={16} className="text-blue-600" />
                         <span className="flex-1 text-sm font-medium text-gray-900">{producto}</span>
@@ -435,28 +529,25 @@ export default function Combos() {
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsEditModalOpen(false)
-                    setSelectedCombo(null)
-                  }}
+                  onClick={handleCloseModal}
                   className="flex-1 px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition font-medium text-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isUpdating || editFormData.productos_nombres.length === 0}
+                  disabled={isSaving || formData.productos_nombres.length === 0}
                   className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {isUpdating ? (
+                  {isSaving ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Actualizando...
+                      Guardando...
                     </>
                   ) : (
                     <>
-                      <Edit size={20} />
-                      Actualizar Combo
+                      {isCreateMode ? <Plus size={20} /> : <Edit size={20} />}
+                      {isCreateMode ? 'Crear Combo' : 'Actualizar Combo'}
                     </>
                   )}
                 </button>

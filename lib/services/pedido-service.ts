@@ -1,10 +1,10 @@
 import { getApiUrl } from '@/lib/config/api-config'
 
 export interface EmpleadoEnPedido {
-  nombre_completo: string
-  calificacion_prom: string
-  dni: string
-  rol: string
+  nombre_completo?: string
+  calificacion_prom?: string
+  dni?: string
+  rol?: string
 }
 
 export interface HistorialEstado {
@@ -17,12 +17,12 @@ export interface HistorialEstado {
 
 export interface ComboEnPedido {
   combo_id: string
-  cantidad: string
+  cantidad: string | number
 }
 
 export interface ProductoEnPedido {
   nombre: string
-  cantidad: string
+  cantidad: string | number
 }
 
 export interface Pedido {
@@ -32,17 +32,20 @@ export interface Pedido {
   productos?: ProductoEnPedido[]
   historial_estados: HistorialEstado[]
   estado: string
-  costo: string
+  costo: string | number
   fecha_entrega_aproximada: string
   direccion: string
   usuario_correo: string
+  esperando_confirmacion?: boolean
+  task_token?: string
 }
 
 export interface PedidosResponse {
   data: Pedido[]
 }
 
-export interface PedidoByIdResponse {
+export interface PedidoResponse {
+  message: string
   data: Pedido
 }
 
@@ -52,6 +55,43 @@ export interface DeletePedidoResponse {
     local_id: string
     pedido_id: string
   }
+}
+
+export interface PedidoProductoPayload {
+  nombre: string
+  cantidad: number
+}
+
+export interface PedidoComboPayload {
+  combo_id: string
+  cantidad: number
+}
+
+export interface CreatePedidoRequest {
+  local_id: string
+  usuario_correo: string
+  productos?: PedidoProductoPayload[]
+  combos?: PedidoComboPayload[]
+  costo: number
+  direccion: string
+  fecha_entrega_aproximada: string
+}
+
+export interface HistorialEstadoPayload {
+  estado: string
+  hora_inicio: string
+  hora_fin: string
+  activo: boolean
+  empleado?: Pick<EmpleadoEnPedido, 'dni'>
+}
+
+export interface UpdatePedidoRequest {
+  local_id: string
+  pedido_id: string
+  estado?: string
+  productos?: PedidoProductoPayload[]
+  combos?: PedidoComboPayload[]
+  historial_estados?: HistorialEstadoPayload[]
 }
 
 class PedidoService {
@@ -90,7 +130,7 @@ class PedidoService {
     }
   }
 
-  async getPedidoById(localId: string, pedidoId: string): Promise<PedidoByIdResponse> {
+  async getPedidoById(localId: string, pedidoId: string): Promise<PedidoResponse> {
     try {
       const data = await this.fetchWithAuth(
         `${this.baseUrl}/pedidos?local_id=${localId}&pedido_id=${pedidoId}`
@@ -98,6 +138,32 @@ class PedidoService {
       return data
     } catch (error) {
       console.error('Error fetching pedido:', error)
+      throw error
+    }
+  }
+
+  async createPedido(payload: CreatePedidoRequest): Promise<PedidoResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/pedidos`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      return data
+    } catch (error) {
+      console.error('Error creating pedido:', error)
+      throw error
+    }
+  }
+
+  async updatePedido(payload: UpdatePedidoRequest): Promise<PedidoResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/pedidos`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      })
+      return data
+    } catch (error) {
+      console.error('Error updating pedido:', error)
       throw error
     }
   }

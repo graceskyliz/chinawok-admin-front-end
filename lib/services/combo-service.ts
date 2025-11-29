@@ -10,6 +10,20 @@ export interface Combo {
   combo_id: string
 }
 
+export interface CreateComboRequest {
+  local_id: string
+  nombre: string
+  productos_nombres: string[]
+  descripcion?: string
+  disponible?: boolean
+  precio?: string
+}
+
+export interface CreateComboResponse {
+  message: string
+  data: Combo
+}
+
 export interface CombosResponse {
   data: Combo[]
   count?: number
@@ -21,17 +35,13 @@ export interface UpdateComboRequest {
   nombre: string
   productos_nombres: string[]
   descripcion?: string
+  disponible?: boolean
+  precio?: string
 }
 
 export interface UpdateComboResponse {
   message: string
-  data: {
-    combo_id: string
-    local_id: string
-    nombre: string
-    descripcion: string
-    productos_nombres: string[]
-  }
+  data: Combo
 }
 
 export interface DeleteComboResponse {
@@ -86,6 +96,19 @@ class ComboService {
       return data
     } catch (error) {
       console.error('Error fetching combo:', error)
+      throw error
+    }
+  }
+
+  async createCombo(request: CreateComboRequest): Promise<CreateComboResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/combos`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      })
+      return data
+    } catch (error) {
+      console.error('Error creating combo:', error)
       throw error
     }
   }
