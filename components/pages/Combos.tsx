@@ -5,7 +5,48 @@ import { useLocalId } from '@/hooks/use-local-id'
 import { comboService, Combo } from '@/lib/services/combo-service'
 import { Package, CheckCircle, XCircle, Grid3x3, Plus, Edit, Trash2, X } from 'lucide-react'
 
-const PRICE_REGEX = /^\d+(?:\.\d{0,2})?$/
+const PRICE_INPUT_REGEX = /^\d*(?:\.\d{0,2})?$/
+const PRICE_SUBMIT_REGEX = /^\d+(?:\.\d{0,2})?$/
+
+const sanitizePriceInput = (rawValue: string): string | null => {
+  const normalized = rawValue.replace(',', '.').trim()
+
+  if (normalized === '') {
+    return ''
+  }
+
+  if (!PRICE_INPUT_REGEX.test(normalized)) {
+    return null
+  }
+
+  return normalized
+}
+
+const normalizePriceForPayload = (value: string): string | undefined | null => {
+  if (!value) {
+    return undefined
+  }
+
+  let normalized = value.replace(',', '.').trim()
+
+  if (normalized.startsWith('.')) {
+    normalized = `0${normalized}`
+  }
+
+  if (normalized.endsWith('.')) {
+    normalized = normalized.slice(0, -1)
+  }
+
+  if (normalized === '') {
+    return undefined
+  }
+
+  if (!PRICE_SUBMIT_REGEX.test(normalized)) {
+    return null
+  }
+
+  return normalized
+}
 
 export default function Combos() {
   const localId = useLocalId()
@@ -54,7 +95,9 @@ export default function Combos() {
       nombre: combo.nombre,
       descripcion: combo.descripcion || '',
       productos_nombres: [...combo.productos_nombres],
-      precio: combo.precio ? combo.precio.toString() : '',
+      precio: combo.precio
+        ? sanitizePriceInput(combo.precio.toString()) ?? combo.precio.toString()
+        : '',
       disponible: combo.disponible ?? true
     })
     setIsCreateMode(false)
@@ -97,13 +140,16 @@ export default function Combos() {
     }))
   }
 
-  const handlePriceChange = (value: string) => {
-    if (value === '' || PRICE_REGEX.test(value)) {
-      setFormData((prev) => ({
-        ...prev,
-        precio: value
-      }))
+  const handlePriceChange = (rawValue: string) => {
+    const sanitized = sanitizePriceInput(rawValue)
+    if (sanitized === null) {
+      return
     }
+
+    setFormData((prev) => ({
+      ...prev,
+      precio: sanitized
+    }))
   }
 
   const handleSaveCombo = async (e: React.FormEvent) => {
@@ -123,22 +169,26 @@ export default function Combos() {
       return
     }
 
+    const pricePayload = normalizePriceForPayload(formData.precio)
+    if (pricePayload === null) {
+      alert('El precio debe ser un número válido con máximo 2 decimales')
+      return
+    }
+
     setIsSaving(true)
     try {
       if (isCreateMode) {
-        const normalizedPrice = formData.precio.endsWith('.') ? formData.precio.slice(0, -1) : formData.precio
         const response = await comboService.createCombo({
           local_id: localId,
           nombre: formData.nombre,
           descripcion: formData.descripcion || undefined,
           productos_nombres: formData.productos_nombres,
           disponible: formData.disponible,
-          precio: normalizedPrice || undefined
+          precio: pricePayload
         })
         setCombos((prev) => [response.data, ...prev])
         alert('Combo creado exitosamente')
       } else if (selectedCombo) {
-        const normalizedPrice = formData.precio.endsWith('.') ? formData.precio.slice(0, -1) : formData.precio
         const response = await comboService.updateCombo({
           local_id: localId,
           combo_id: selectedCombo.combo_id,
@@ -146,7 +196,7 @@ export default function Combos() {
           descripcion: formData.descripcion || undefined,
           productos_nombres: formData.productos_nombres,
           disponible: formData.disponible,
-          precio: normalizedPrice || undefined
+          precio: pricePayload
         })
         setCombos((prev) =>
           prev.map((c) =>
@@ -453,9 +503,8 @@ export default function Combos() {
                   <input
                     type="text"
                     inputMode="decimal"
-                    pattern="\\d+(\\.\\d{0,2})?"
                     value={formData.precio}
-                    onChange={(e) => handlePriceChange(e.target.value.replace(',', '.'))}
+                    onChange={(e) => handlePriceChange(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                     placeholder="Ej: 49.90"
                   />

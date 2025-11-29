@@ -4,15 +4,29 @@ export interface Oferta {
   local_id: string
   combo_id?: string
   producto_nombre?: string
-  porcentaje_descuento: string
+  porcentaje_descuento: string | number
   fecha_limite: string
   fecha_inicio: string
   oferta_id: string
 }
 
+export interface CreateOfertaRequest {
+  local_id: string
+  porcentaje_descuento: number
+  fecha_inicio: string
+  fecha_limite: string
+  producto_nombre?: string
+  combo_id?: string
+}
+
 export interface OfertasResponse {
   data: Oferta[]
   count?: number
+}
+
+export interface CreateOfertaResponse {
+  message: string
+  data: Oferta
 }
 
 export interface DeleteOfertaResponse {
@@ -76,6 +90,19 @@ class OfertaService {
       return data
     } catch (error) {
       console.error('Error fetching ofertas:', error)
+      throw error
+    }
+  }
+
+  async createOferta(request: CreateOfertaRequest): Promise<CreateOfertaResponse> {
+    try {
+      const data = await this.fetchWithAuth(`${this.baseUrl}/ofertas`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      })
+      return data
+    } catch (error) {
+      console.error('Error creating oferta:', error)
       throw error
     }
   }

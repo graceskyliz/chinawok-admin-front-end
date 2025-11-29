@@ -5,6 +5,8 @@ import { useLocalId } from '@/hooks/use-local-id'
 import { ofertaService, Oferta } from '@/lib/services/oferta-service'
 import { Tag, Calendar, Percent, Package, Utensils, Plus, Edit, Trash2, Clock, X } from 'lucide-react'
 
+type TipoOferta = 'producto' | 'combo'
+
 export default function Ofertas() {
   const localId = useLocalId()
   const [ofertas, setOfertas] = useState<Oferta[]>([])
@@ -17,6 +19,16 @@ export default function Ofertas() {
   const [editFormData, setEditFormData] = useState({
     producto_nombre: '',
     porcentaje_descuento: 0,
+    fecha_limite: ''
+  })
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [createFormData, setCreateFormData] = useState({
+    tipo: 'producto' as TipoOferta,
+    producto_nombre: '',
+    combo_id: '',
+    porcentaje_descuento: 10,
+    fecha_inicio: '',
     fecha_limite: ''
   })
 
@@ -83,6 +95,87 @@ export default function Ofertas() {
       alert(error instanceof Error ? error.message : 'Error al eliminar oferta')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const resetCreateForm = () => {
+    setCreateFormData({
+      tipo: 'producto',
+      producto_nombre: '',
+      combo_id: '',
+      porcentaje_descuento: 10,
+      fecha_inicio: '',
+      fecha_limite: ''
+    })
+  }
+
+  const handleOpenCreateModal = () => {
+    resetCreateForm()
+    setIsCreateModalOpen(true)
+  }
+
+  const handleCreateOferta = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!localId) {
+      alert('No se pudo obtener el ID del local')
+      return
+    }
+
+    if (createFormData.tipo === 'producto' && !createFormData.producto_nombre.trim()) {
+      alert('Debes ingresar el nombre del producto')
+      return
+    }
+
+    if (createFormData.tipo === 'combo' && !createFormData.combo_id.trim()) {
+      alert('Debes ingresar el ID del combo')
+      return
+    }
+
+    if (!createFormData.fecha_inicio || !createFormData.fecha_limite) {
+      alert('Debes seleccionar la fecha de inicio y fin')
+      return
+    }
+
+    const fechaInicio = new Date(createFormData.fecha_inicio)
+    const fechaLimite = new Date(createFormData.fecha_limite)
+
+    if (isNaN(fechaInicio.getTime()) || isNaN(fechaLimite.getTime())) {
+      alert('Las fechas seleccionadas no son válidas')
+      return
+    }
+
+    if (fechaLimite <= fechaInicio) {
+      alert('La fecha límite debe ser posterior a la fecha de inicio')
+      return
+    }
+
+    if (createFormData.porcentaje_descuento < 1 || createFormData.porcentaje_descuento > 100) {
+      alert('El porcentaje debe estar entre 1 y 100')
+      return
+    }
+
+    setIsCreating(true)
+    try {
+      const payload = {
+        local_id: localId,
+        porcentaje_descuento: createFormData.porcentaje_descuento,
+        fecha_inicio: fechaInicio.toISOString(),
+        fecha_limite: fechaLimite.toISOString(),
+        ...(createFormData.tipo === 'producto'
+          ? { producto_nombre: createFormData.producto_nombre.trim() }
+          : { combo_id: createFormData.combo_id.trim() })
+      }
+
+      const response = await ofertaService.createOferta(payload)
+      setOfertas((prev) => [response.data, ...prev])
+      alert('Oferta creada exitosamente')
+      setIsCreateModalOpen(false)
+      resetCreateForm()
+    } catch (error) {
+      console.error('Error al crear oferta:', error)
+      alert(error instanceof Error ? error.message : 'Error al crear oferta')
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -239,7 +332,10 @@ export default function Ofertas() {
           <h2 className="text-2xl font-bold text-gray-900">Ofertas y Promociones</h2>
           <p className="text-sm text-gray-500 mt-1">Gestiona los descuentos del local</p>
         </div>
-        <button className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-medium">
+        <button
+          onClick={handleOpenCreateModal}
+          className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-medium"
+        >
           <Plus size={20} />
           Nueva Oferta
         </button>
@@ -345,10 +441,181 @@ export default function Ofertas() {
           <Tag size={48} className="text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay ofertas registradas</h3>
           <p className="text-sm text-gray-600 mb-4">Crea tu primera oferta para empezar</p>
-          <button className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition inline-flex items-center gap-2 font-medium">
+          <button
+            onClick={handleOpenCreateModal}
+            className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition inline-flex items-center gap-2 font-medium"
+          >
             <Plus size={20} />
             Crear Oferta
           </button>
+        </div>
+      )}
+
+      {/* Modal de Creación */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Crear Oferta</h2>
+              <button
+                onClick={() => {
+                  setIsCreateModalOpen(false)
+                  resetCreateForm()
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateOferta} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tipo de Oferta *
+                </label>
+                <select
+                  value={createFormData.tipo}
+                  onChange={(e) =>
+                    setCreateFormData((prev) => ({
+                      ...prev,
+                      tipo: e.target.value as TipoOferta
+                    }))
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="producto">Producto</option>
+                  <option value="combo">Combo</option>
+                </select>
+              </div>
+
+              {createFormData.tipo === 'producto' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre del Producto *
+                  </label>
+                  <input
+                    type="text"
+                    value={createFormData.producto_nombre}
+                    onChange={(e) =>
+                      setCreateFormData((prev) => ({
+                        ...prev,
+                        producto_nombre: e.target.value
+                      }))
+                    }
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    placeholder="Arroz Chaufa Mixto"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID del Combo *
+                  </label>
+                  <input
+                    type="text"
+                    value={createFormData.combo_id}
+                    onChange={(e) =>
+                      setCreateFormData((prev) => ({
+                        ...prev,
+                        combo_id: e.target.value
+                      }))
+                    }
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    placeholder="6f06922e-..."
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fecha Inicio *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={createFormData.fecha_inicio}
+                    onChange={(e) =>
+                      setCreateFormData((prev) => ({
+                        ...prev,
+                        fecha_inicio: e.target.value
+                      }))
+                    }
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fecha Límite *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={createFormData.fecha_limite}
+                    onChange={(e) =>
+                      setCreateFormData((prev) => ({
+                        ...prev,
+                        fecha_limite: e.target.value
+                      }))
+                    }
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Porcentaje de Descuento *
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={createFormData.porcentaje_descuento}
+                    onChange={(e) =>
+                      setCreateFormData((prev) => ({
+                        ...prev,
+                        porcentaje_descuento: Number(e.target.value)
+                      }))
+                    }
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    required
+                  />
+                  <Percent size={20} className="absolute right-3 top-2.5 text-gray-400" />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Entre 1% y 100%</p>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateModalOpen(false)
+                    resetCreateForm()
+                  }}
+                  className="flex-1 px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition font-medium text-gray-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="flex-1 bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isCreating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Creando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={20} />
+                      Crear Oferta
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
