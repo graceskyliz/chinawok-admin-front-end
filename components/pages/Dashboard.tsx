@@ -32,7 +32,8 @@ export default function Dashboard() {
         
         // Calculate total revenue from all orders
         const totalIngresos = pedidosResponse.data.reduce((sum, pedido) => {
-          return sum + parseFloat(pedido.costo || '0')
+          const costo = typeof pedido.costo === 'number' ? pedido.costo : parseFloat(pedido.costo || '0')
+          return sum + costo
         }, 0)
         setIngresosTotal(totalIngresos)
       } catch (err) {

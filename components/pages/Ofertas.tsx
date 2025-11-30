@@ -187,7 +187,9 @@ export default function Ofertas() {
     
     setEditFormData({
       producto_nombre: oferta.producto_nombre || '',
-      porcentaje_descuento: parseFloat(oferta.porcentaje_descuento),
+      porcentaje_descuento: typeof oferta.porcentaje_descuento === 'number' 
+        ? oferta.porcentaje_descuento 
+        : parseFloat(oferta.porcentaje_descuento),
       fecha_limite: fechaFormateada
     })
     setIsEditModalOpen(true)
