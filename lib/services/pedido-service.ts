@@ -182,6 +182,29 @@ class PedidoService {
       throw error
     }
   }
+
+  async confirmOrderDelivery(localId: string, pedidoId: string, taskToken?: string): Promise<PedidoResponse> {
+    try {
+      const payload: any = {
+        local_id: localId,
+        pedido_id: pedidoId,
+        estado: 'recibido'
+      }
+      
+      if (taskToken) {
+        payload.task_token = taskToken
+      }
+      
+      const data = await this.fetchWithAuth(`${this.baseUrl}/pedidos/confirmar-entrega`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      return data
+    } catch (error) {
+      console.error('Error confirming order delivery:', error)
+      throw error
+    }
+  }
 }
 
 export const pedidoService = new PedidoService()

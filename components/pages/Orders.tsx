@@ -1,14 +1,19 @@
 'use client'
 
-import { MapPin, Phone, Clock, CheckCircle, Trash2, ChevronLeft, ChevronRight, X, User, Package } from 'lucide-react'
-import { useState, useEffect, useMemo } from 'react'
+import { MapPin, Phone, Clock, CheckCircle, Trash2, ChevronLeft, ChevronRight, X, User, Package, Bell } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useLocalId } from '@/hooks/use-local-id'
+import { useAuth } from '@/lib/contexts/auth-context'
+import { useWebSocket } from '@/hooks/use-websocket'
 import { pedidoService, Pedido } from '@/lib/services/pedido-service'
+import { WebSocketNotification } from '@/lib/types/websocket'
+import { WebSocketStatus } from '@/components/ui/websocket-status'
 
 const ITEMS_PER_PAGE = 10
 
 export default function Orders() {
   const localId = useLocalId()
+  const { user } = useAuth()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [orders, setOrders] = useState<Pedido[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -17,6 +22,85 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<Pedido | null>(null)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [notifications, setNotifications] = useState<WebSocketNotification[]>([])
+  const [showConfirmButton, setShowConfirmButton] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
+
+  // WebSocket message handler
+  const handleWebSocketMessage = useCallback((notification: WebSocketNotification) => {
+    console.log('[Orders] Notificación recibida:', notification)
+    
+    // Agregar a lista de notificaciones
+    setNotifications(prev => [notification, ...prev].slice(0, 50)) // Keep last 50
+    
+    // Si es una notificación de pedido entregado que requiere confirmación
+    if (notification.tipo === 'PEDIDO_ENTREGADO' && 
+        notification.datos.accion_requerida === 'CONFIRMAR_RECEPCION') {
+      setShowConfirmButton(true)
+    }
+    
+    // Si hay un pedido seleccionado en el modal, actualizarlo
+    if (selectedOrder && selectedOrder.pedido_id === notification.pedido_id) {
+      setSelectedOrder(prevOrder => {
+        if (!prevOrder) return prevOrder
+        
+        // Actualizar el estado principal
+        const updatedOrder = {
+          ...prevOrder,
+          estado: notification.datos.estado
+        }
+        
+        // Actualizar historial de estados
+        if (prevOrder.historial_estados && prevOrder.historial_estados.length > 0) {
+          const newHistorial = [...prevOrder.historial_estados]
+          
+          // Cerrar el último estado activo
+          const lastActiveIndex = newHistorial.findIndex(h => h.activo)
+          if (lastActiveIndex !== -1) {
+            newHistorial[lastActiveIndex] = {
+              ...newHistorial[lastActiveIndex],
+              activo: false,
+              hora_fin: notification.timestamp
+            }
+          }
+          
+          // Agregar nuevo estado
+          newHistorial.push({
+            estado: notification.datos.estado,
+            hora_inicio: notification.timestamp,
+            hora_fin: notification.timestamp,
+            activo: true,
+            empleado: notification.datos.empleado || null
+          })
+          
+          updatedOrder.historial_estados = newHistorial
+        }
+        
+        return updatedOrder
+      })
+    }
+    
+    // Actualizar la lista de pedidos
+    setOrders(prevOrders => {
+      return prevOrders.map(order => {
+        if (order.pedido_id === notification.pedido_id) {
+          return {
+            ...order,
+            estado: notification.datos.estado
+          }
+        }
+        return order
+      })
+    })
+  }, [selectedOrder])
+
+  // WebSocket connection
+  const { isConnected, reconnectAttempts } = useWebSocket({
+    usuarioCorreo: user?.email,
+    localId: localId || undefined,
+    pedidoId: selectedOrder?.pedido_id,
+    onMessage: handleWebSocketMessage
+  })
 
   useEffect(() => {
     const fetchPedidos = async () => {
@@ -99,6 +183,41 @@ export default function Orders() {
   const closeModal = () => {
     setIsModalOpen(false)
     setSelectedOrder(null)
+    setShowConfirmButton(false)
+  }
+
+  const handleConfirmDelivery = async () => {
+    if (!selectedOrder || !localId) {
+      alert('No se pudo confirmar la entrega')
+      return
+    }
+
+    setIsConfirming(true)
+    try {
+      await pedidoService.confirmOrderDelivery(
+        localId, 
+        selectedOrder.pedido_id,
+        selectedOrder.task_token
+      )
+      
+      setShowConfirmButton(false)
+      alert('Entrega confirmada exitosamente')
+      
+      // Actualizar el pedido localmente
+      setSelectedOrder(prev => prev ? { ...prev, estado: 'recibido' } : null)
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.pedido_id === selectedOrder.pedido_id 
+            ? { ...order, estado: 'recibido' } 
+            : order
+        )
+      )
+    } catch (error) {
+      console.error('Error al confirmar entrega:', error)
+      alert(error instanceof Error ? error.message : 'Error al confirmar entrega')
+    } finally {
+      setIsConfirming(false)
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -216,10 +335,7 @@ export default function Orders() {
 
                 {/* Status & Actions */}
                 <div className="flex flex-col items-end justify-between">
-                  <span className={`px-4 py-2 rounded-full text-sm font-semibold ${getStatusColor(order.estado)}`}>
-                    {getStatusLabel(order.estado)}
-                  </span>
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex gap-2">
                     <button 
                       onClick={() => handleViewDetails(order.pedido_id)}
                       className="text-sm font-medium text-red-600 hover:text-red-700"
@@ -306,7 +422,10 @@ export default function Orders() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-              <h2 className="text-xl font-bold text-gray-900">Detalles del Pedido</h2>
+              <div className="flex items-center gap-4">
+                <h2 className="text-xl font-bold text-gray-900">Detalles del Pedido</h2>
+                <WebSocketStatus isConnected={isConnected} reconnectAttempts={reconnectAttempts} />
+              </div>
               <button
                 onClick={closeModal}
                 className="p-2 hover:bg-gray-100 rounded-lg transition"
@@ -429,7 +548,9 @@ export default function Orders() {
                             <div className="mt-2 pt-2 border-t border-gray-200">
                               <p className="font-medium text-gray-700">Empleado: {historial.empleado.nombre_completo}</p>
                               <p>DNI: {historial.empleado.dni} • Rol: {historial.empleado.rol}</p>
-                              <p>Calificación: ⭐ {parseFloat(historial.empleado.calificacion_prom).toFixed(2)}</p>
+                              {historial.empleado.calificacion_prom && (
+                                <p>Calificación: ⭐ {parseFloat(historial.empleado.calificacion_prom).toFixed(2)}</p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -437,6 +558,57 @@ export default function Orders() {
                     ))}
                   </div>
                 </div>
+
+                {/* Notifications Section */}
+                {notifications.length > 0 && (
+                  <div>
+                    <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <Bell size={20} className="text-purple-600" />
+                      Notificaciones en Tiempo Real ({notifications.length})
+                    </h3>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {notifications.slice(0, 5).map((notification, idx) => (
+                        <div key={idx} className="bg-purple-50 rounded-lg p-3 border-l-4 border-purple-500">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-purple-800">{notification.tipo}</span>
+                            <span className="text-xs text-gray-600">{new Date(notification.timestamp).toLocaleTimeString()}</span>
+                          </div>
+                          <p className="text-sm text-gray-900">{notification.datos.mensaje}</p>
+                          <p className="text-xs text-gray-600 mt-1">Estado: {notification.datos.estado}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Confirm Delivery Button */}
+                {showConfirmButton && selectedOrder.esperando_confirmacion && (
+                  <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-green-900 mb-1">Pedido Entregado</h3>
+                        <p className="text-sm text-green-700">El repartidor ha marcado este pedido como entregado. Por favor, confirma la recepción.</p>
+                      </div>
+                      <button
+                        onClick={handleConfirmDelivery}
+                        disabled={isConfirming}
+                        className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isConfirming ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            Confirmando...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle size={20} />
+                            Confirmar Recepción
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-12 text-center text-gray-500">
