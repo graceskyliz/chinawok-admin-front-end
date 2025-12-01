@@ -50,7 +50,7 @@ export const useWebSocket = (config: WebSocketConfig) => {
   const connect = useCallback(() => {
     // Don't connect if required params are missing
     if (!usuarioCorreo || !pedidoId) {
-      console.info('[WebSocket] Esperando parámetros requeridos (usuario_correo y pedido_id)')
+      // Silently return without logging when params are intentionally not provided
       return
     }
 
@@ -109,7 +109,6 @@ export const useWebSocket = (config: WebSocketConfig) => {
       
       ws.onerror = (event: Event) => {
         console.warn('[WebSocket] ⚠️  Error de conexión')
-        // Don't set error state to avoid UI disruption
         if (onError) onError(event)
       }
       
@@ -120,17 +119,18 @@ export const useWebSocket = (config: WebSocketConfig) => {
         
         if (onDisconnect) onDisconnect()
         
-        // Only reconnect if it wasn't a normal closure and we haven't exceeded attempts
-        if (shouldReconnectRef.current && event.code !== 1000 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        // CRITICAL: Only reconnect if params are still available
+        if (shouldReconnectRef.current && 
+            usuarioCorreo && 
+            pedidoId && 
+            event.code !== 1000 && 
+            reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           console.log(`[WebSocket] Reconectando en ${RECONNECT_DELAY}ms... (${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
           
           reconnectTimeoutRef.current = setTimeout(() => {
             setReconnectAttempts(prev => prev + 1)
             connect()
           }, RECONNECT_DELAY)
-        } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-          console.warn('[WebSocket] Máximo de reconexiones alcanzado')
-          setError('WebSocket no disponible')
         }
       }
       
@@ -158,13 +158,20 @@ export const useWebSocket = (config: WebSocketConfig) => {
   }, [])
 
   useEffect(() => {
-    shouldReconnectRef.current = true
-    connect()
+    // Only attempt connection if we have the required parameters
+    if (usuarioCorreo && pedidoId) {
+      shouldReconnectRef.current = true
+      setReconnectAttempts(0) // Reset attempts when params change
+      connect()
+    } else {
+      // Disconnect if params are removed (e.g., modal closed)
+      disconnect()
+    }
 
     return () => {
       disconnect()
     }
-  }, [connect, disconnect])
+  }, [usuarioCorreo, pedidoId, connect, disconnect])
 
   return {
     isConnected,
