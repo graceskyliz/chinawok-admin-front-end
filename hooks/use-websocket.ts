@@ -1,39 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { WebSocketNotification, WebSocketConfig } from '@/lib/types/websocket'
 
-const RAW_WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL?.trim()
-const WS_BASE_URL = RAW_WS_BASE_URL && /^wss?:\/\//i.test(RAW_WS_BASE_URL) ? RAW_WS_BASE_URL : null
-const RECONNECT_DELAY = 3000 // 3 seconds
-const MAX_RECONNECT_ATTEMPTS = 10
-
-const READY_STATE_LABELS: Record<number, string> = {
-  0: 'conectando',
-  1: 'abierta',
-  2: 'cerrando',
-  3: 'cerrada'
-}
-
-const describeReadyState = (ws?: WebSocket | null) => {
-  if (!ws) return 'desconocido'
-  const label = READY_STATE_LABELS[ws.readyState] || 'desconocido'
-  return `${label} (${ws.readyState})`
-}
-
-const describeWebSocketError = (event: Event, ws?: WebSocket | null) => {
-  if (event instanceof ErrorEvent) {
-    return event.message || event.error?.message || 'ErrorEvent sin detalles adicionales'
-  }
-
-  const maybeMessage = (event as { message?: string }).message
-  if (maybeMessage) {
-    return maybeMessage
-  }
-
-  return `Evento "${event.type}" sin detalles adicionales. Estado WS: ${describeReadyState(ws)}`
-}
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || ''
+const RECONNECT_DELAY = 5000 // 5 seconds
+const MAX_RECONNECT_ATTEMPTS = 3
 
 export const useWebSocket = (config: WebSocketConfig) => {
-  const { usuarioCorreo, pedidoId, localId, onMessage, onConnect, onDisconnect, onError } = config
+  const { usuarioCorreo, pedidoId, onMessage, onConnect, onDisconnect, onError } = config
   
   const [isConnected, setIsConnected] = useState(false)
   const [lastNotification, setLastNotification] = useState<WebSocketNotification | null>(null)
@@ -48,16 +21,15 @@ export const useWebSocket = (config: WebSocketConfig) => {
     if (!WS_BASE_URL) {
       return null
     }
-
+    
     const params = new URLSearchParams()
     
     if (usuarioCorreo) params.append('usuario_correo', usuarioCorreo)
     if (pedidoId) params.append('pedido_id', pedidoId)
-    if (localId) params.append('local_id', localId)
     
     const queryString = params.toString()
-    return queryString ? `${WS_BASE_URL}?${queryString}` : WS_BASE_URL
-  }, [usuarioCorreo, pedidoId, localId])
+    return queryString ? `${WS_BASE_URL}?${queryString}` : null
+  }, [usuarioCorreo, pedidoId])
 
   const disconnect = useCallback(() => {
     shouldReconnectRef.current = false
@@ -76,15 +48,15 @@ export const useWebSocket = (config: WebSocketConfig) => {
   }, [])
 
   const connect = useCallback(() => {
-    if (typeof window === 'undefined') {
+    // Don't connect if required params are missing
+    if (!usuarioCorreo || !pedidoId) {
+      console.info('[WebSocket] Esperando parámetros requeridos (usuario_correo y pedido_id)')
       return
     }
 
+    // Don't connect if we don't have a WebSocket URL
     if (!WS_BASE_URL) {
-      const message = 'La URL de WebSocket no está configurada. Define NEXT_PUBLIC_WS_URL.'
-      console.warn('[WebSocket] Configuración faltante:', message)
-      setError(message)
-      setIsConnected(false)
+      console.info('[WebSocket] NEXT_PUBLIC_WS_URL no configurada')
       return
     }
 
@@ -95,7 +67,8 @@ export const useWebSocket = (config: WebSocketConfig) => {
 
     // Don't reconnect if we've exceeded max attempts
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      setError(`No se pudo conectar después de ${MAX_RECONNECT_ATTEMPTS} intentos`)
+      console.warn(`[WebSocket] Máximo de intentos alcanzado (${MAX_RECONNECT_ATTEMPTS})`)
+      setError(`WebSocket no disponible`)
       return
     }
 
@@ -104,12 +77,13 @@ export const useWebSocket = (config: WebSocketConfig) => {
       if (!wsUrl) {
         return
       }
+      
       console.log('[WebSocket] Conectando a:', wsUrl)
       
       const ws = new WebSocket(wsUrl)
       
       ws.onopen = () => {
-        console.log('[WebSocket] Conexión establecida')
+        console.log('[WebSocket] ✅ Conexión establecida')
         setIsConnected(true)
         setError(null)
         setReconnectAttempts(0)
@@ -120,7 +94,7 @@ export const useWebSocket = (config: WebSocketConfig) => {
       ws.onmessage = (event: MessageEvent) => {
         try {
           const notification: WebSocketNotification = JSON.parse(event.data)
-          console.log('[WebSocket] Mensaje recibido:', notification)
+          console.log('[WebSocket] 📩 Mensaje recibido:', notification)
           
           setLastNotification(notification)
           
@@ -134,28 +108,29 @@ export const useWebSocket = (config: WebSocketConfig) => {
       }
       
       ws.onerror = (event: Event) => {
-        const details = describeWebSocketError(event, ws)
-        console.error('[WebSocket] Error de conexión:', details)
-        setError(details)
-        
+        console.warn('[WebSocket] ⚠️  Error de conexión')
+        // Don't set error state to avoid UI disruption
         if (onError) onError(event)
       }
       
       ws.onclose = (event: CloseEvent) => {
-        console.log('[WebSocket] Conexión cerrada:', event.code, event.reason)
+        console.log('[WebSocket] Conexión cerrada:', event.code)
         setIsConnected(false)
         wsRef.current = null
         
         if (onDisconnect) onDisconnect()
         
-        // Intentar reconectar automáticamente si no fue un cierre intencional
-        if (shouldReconnectRef.current && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          console.log(`[WebSocket] Intentando reconectar en ${RECONNECT_DELAY}ms... (Intento ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+        // Only reconnect if it wasn't a normal closure and we haven't exceeded attempts
+        if (shouldReconnectRef.current && event.code !== 1000 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          console.log(`[WebSocket] Reconectando en ${RECONNECT_DELAY}ms... (${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
           
           reconnectTimeoutRef.current = setTimeout(() => {
             setReconnectAttempts(prev => prev + 1)
             connect()
           }, RECONNECT_DELAY)
+        } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+          console.warn('[WebSocket] Máximo de reconexiones alcanzado')
+          setError('WebSocket no disponible')
         }
       }
       
@@ -164,7 +139,7 @@ export const useWebSocket = (config: WebSocketConfig) => {
       console.error('[WebSocket] Error al crear conexión:', err)
       setError('No se pudo establecer la conexión')
     }
-  }, [buildWebSocketUrl, onMessage, onConnect, onDisconnect, onError, reconnectAttempts])
+  }, [buildWebSocketUrl, onMessage, onConnect, onDisconnect, onError, reconnectAttempts, usuarioCorreo, pedidoId])
 
   const reconnect = useCallback(() => {
     disconnect()

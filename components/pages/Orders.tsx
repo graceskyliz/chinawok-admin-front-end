@@ -94,11 +94,10 @@ export default function Orders() {
     })
   }, [selectedOrder])
 
-  // WebSocket connection
+  // WebSocket connection - SOLO cuando el modal está abierto y hay un pedido seleccionado
   const { isConnected, reconnectAttempts } = useWebSocket({
-    usuarioCorreo: user?.email,
-    localId: localId || undefined,
-    pedidoId: selectedOrder?.pedido_id,
+    usuarioCorreo: isModalOpen && selectedOrder ? user?.email : undefined,
+    pedidoId: isModalOpen && selectedOrder ? selectedOrder.pedido_id : undefined,
     onMessage: handleWebSocketMessage
   })
 

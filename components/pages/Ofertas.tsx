@@ -212,6 +212,7 @@ export default function Ofertas() {
         oferta_id: selectedOferta.oferta_id,
         producto_nombre: editFormData.producto_nombre || undefined,
         porcentaje_descuento: editFormData.porcentaje_descuento,
+        fecha_inicio: selectedOferta.fecha_inicio, // Mantener fecha_inicio original
         fecha_limite: fechaLimiteISO
       })
       
