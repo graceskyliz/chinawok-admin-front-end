@@ -42,6 +42,7 @@ export interface UpdateOfertaRequest {
   oferta_id: string
   producto_nombre?: string
   porcentaje_descuento: number
+  fecha_inicio: string
   fecha_limite: string
 }
 
